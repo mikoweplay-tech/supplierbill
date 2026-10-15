@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>window.claude={use:function(){return Promise.resolve(null);}};</script>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>window.HOSTED=true;window.claude={use:function(){return Promise.resolve(null);}};</script>
 <title>Supplier Bill 供应商账单</title>
 <style>
 :root {
@@ -153,6 +153,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     <div class="pages" id="pages" style="margin-top:14px"></div>
     <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
       <button class="btn main" id="saveBtn" type="button">Save PDF<br>保存 PDF</button>
+      <button class="btn alt" id="shareBill" type="button" hidden>Send bill link (WhatsApp)<br>发送账单链接 (WhatsApp)</button>
       <a class="btn alt" id="waBtn" target="_blank" rel="noopener" href="https://wa.me/">Open WhatsApp 打开 WhatsApp<br>(bill text only 只有账单文字)</a>
       <p class="hint" id="howto"><b>To send the PDF in WhatsApp 在WhatsApp发送PDF:</b><br>1) Tap "Save PDF" first 先点“保存PDF”<br>2) Open the chat, tap 📎 → Document 文件<br>3) Pick the PDF just saved 选刚保存的PDF → Send 发送</p>
       <p class="msg" id="msg3" role="status" aria-live="polite"></p>
@@ -182,6 +183,12 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       <div class="mlist" id="conList"></div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div id="shareBox" hidden>
+        <div class="mh">Same setup for everyone 让同事用同样的设置<span class="sub">Set the suppliers, items and containers above first. Then send this link: when staff open it once, their phone gets your setup. 先设好上面的名单,再把这个链接发给同事,他们点开一次就有同样的设置。</span></div>
+        <button class="btn main" id="shareSetup" type="button">Send setup link (WhatsApp)<br>发送设置链接 (WhatsApp)</button>
+        <input type="text" id="setupLink" readonly aria-label="Setup link 设置链接">
+        <button class="btn quiet" id="copySetup" type="button">Copy link 复制链接</button>
+      </div>
       <label class="f">Company name on the bill 账单上的公司名<input type="text" id="coName" autocomplete="off"></label>
       <button class="btn quiet" id="resetBtn" type="button">Reset to default 恢复默认</button>
       <p class="msg" id="msg4" role="status" aria-live="polite"></p>
@@ -273,13 +280,20 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       var h = location.hash || '';
       if (h.indexOf('#d=') === 0) {
         var t = decodeURIComponent(escape(atob(decodeURIComponent(h.slice(3)))));
-        if (t && /\S/.test(t)) { listText = t; custom = true; store(); sayLater = 'Prices updated 价钱已更新'; }
+        if (t && /\S/.test(t)) { listText = t; custom = true; store(); sayLater = 'Setup updated 设置已更新'; }
         history.replaceState(null, '', location.pathname + location.search);
       }
     } catch (e) {}
+    try {
+      var h2 = location.hash || '';
+      if (h2.indexOf('#b=') === 0) {
+        pendingBill = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h2.slice(3))))));
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    } catch (e) { pendingBill = null; }
     data = parse(listText);
   }
-  var sayLater = '';
+  var sayLater = '', pendingBill = null;
 
   /* ---------- screen 1 ---------- */
   function drawSuppliers() {
@@ -527,8 +541,8 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       x.fillStyle = '#1a1a1a'; x.fillRect(M, y + 18, PW - 2 * M, 3); y += 62;
     }
     page();
-    if (data.company.trim()) { x.font = '600 28px ' + FONT; x.fillStyle = '#5a625e'; x.textAlign = 'left'; x.fillText(data.company.trim(), M, y); y += 52; }
-    x.fillStyle = '#1a1a1a'; x.font = '700 50px ' + FONT; x.textAlign = 'left'; x.fillText('Payment Bill 付款账单', M, y); y += 62;
+    if (data.company.trim()) { var cp = 84; x.textAlign = 'left'; x.fillStyle = '#1F4FA3'; do { x.font = '800 ' + cp + 'px ' + FONT; cp -= 2; } while (x.measureText(data.company.trim()).width > PW - 2 * M && cp > 34); x.fillText(data.company.trim(), M, y + 14); y += 22 + cp; }
+    x.fillStyle = '#1a1a1a'; x.font = '700 32px ' + FONT; x.textAlign = 'left'; x.fillText('Payment Bill 付款账单', M, y); y += 50;
     function meta(label, val, px, py) {
       x.font = '600 24px ' + FONT; x.fillStyle = '#5a625e'; x.fillText(label, px, py);
       var lw = x.measureText(label + '  ').width; x.font = '500 29px ' + FONT; x.fillStyle = '#1a1a1a'; x.fillText(val, px + lw, py);
@@ -539,19 +553,19 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     var subs = {}; L.forEach(function (it) { subs[it.b] = (subs[it.b] || 0) + it.sen; });
     var lastB = -1;
     L.forEach(function (it, i) {
-      x.font = '500 29px ' + FONT; var nl = wrap(x, it.name, nameW).slice(0, 3), h = 22 + nl.length * 40, hd = it.b !== lastB;
-      if (y + h + (hd ? 60 : 0) > PH - M - 220) { page(); tableHead(); hd = true; }
+      x.font = '500 28px ' + FONT; var nl = wrap(x, it.name, nameW).slice(0, 3), h = 12 + nl.length * 34, hd = it.b !== lastB;
+      if (y + h + (hd ? 50 : 0) > PH - M - 220) { page(); tableHead(); hd = true; }
       if (hd) {
         x.fillStyle = '#F1F3F2'; x.fillRect(M, y - 34, PW - 2 * M, 50);
         x.fillStyle = '#1a1a1a'; x.font = '700 28px ' + FONT; x.textAlign = 'left'; x.fillText(bname(it), M + 12, y);
         x.textAlign = 'right'; x.font = '700 26px ' + MONO; x.fillText(money(subs[it.b]), cAmt - 12, y);
-        y += 54; lastB = it.b;
+        y += 48; lastB = it.b;
       }
-      x.fillStyle = '#1a1a1a'; x.font = '500 29px ' + FONT; x.textAlign = 'left'; x.fillText(String(i + 1), M + 12, y);
-      nl.forEach(function (ln, k) { x.fillText(ln, nameX, y + k * 40); });
-      x.font = '500 29px ' + MONO; x.textAlign = 'right';
+      x.fillStyle = '#1a1a1a'; x.font = '500 28px ' + FONT; x.textAlign = 'left'; x.fillText(String(i + 1), M + 12, y);
+      nl.forEach(function (ln, k) { x.fillText(ln, nameX, y + k * 34); });
+      x.font = '500 28px ' + MONO; x.textAlign = 'right';
       x.fillText(fmt(it.w, 2, 3), cWt, y); x.fillText(fmt(it.p, 2, 3), cPrice + 20, y); x.fillText(money(it.sen), cAmt - 12, y);
-      y += h - 8; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 34;
+      y += h - 6; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 20;
     });
     if (y > PH - M - 200) { page(); }
     y += 6; x.fillStyle = '#1a1a1a'; x.fillRect(M, y - 38, PW - 2 * M, 3);
@@ -688,6 +702,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       data.containers.splice(i, 1); commit('Deleted 已删除');
     }, function (i, nv) { data.containers[i] = nv; commit('Renamed 已改名'); });
     $('coName').value = data.company || '';
+    if (window.HOSTED) $('setupLink').value = setupLink();
   }
   function has(arr, nm, f) { nm = nm.toLowerCase(); return arr.some(function (x) { return f(x).toLowerCase() === nm; }); }
   function addSupplier(nm) {
@@ -717,6 +732,22 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     addSupplier(n); $('osName').value = ''; drawSuppliers();
     var b = $('exBanner'); b.hidden = false; b.textContent = 'Saved to the list 已存入名单: ' + n;
   });
+  /* ---------- one setup for everyone: the list travels inside the link ---------- */
+  function setupLink() {
+    var t = serialize(data);
+    return location.origin + location.pathname + '#d=' + encodeURIComponent(btoa(unescape(encodeURIComponent(t))));
+  }
+  if (window.HOSTED) $('shareBox').hidden = false;
+  $('editBtn').addEventListener('click', function () { if (window.HOSTED) $('setupLink').value = setupLink(); });
+  $('shareSetup').addEventListener('click', function () {
+    var l = setupLink(); $('setupLink').value = l;
+    window.open('https://wa.me/?text=' + encodeURIComponent('Supplier bill setup 账单设置 - tap once 点一次:\n' + l), '_blank');
+  });
+  $('copySetup').addEventListener('click', function () {
+    var i = $('setupLink'); i.value = setupLink(); i.focus(); i.select();
+    var m = $('msg4');
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(function () { m.className = 'msg'; m.textContent = 'Link copied 已复制'; }, function () { m.className = 'msg'; m.textContent = 'Press and hold the link, then Copy 长按链接再点复制'; });
+  });
   $('resetBtn').addEventListener('click', function () {
     var b = this;
     if (!b.classList.contains('sure')) {
@@ -731,7 +762,27 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     var m = $('msg4'); m.className = 'msg'; m.textContent = 'Reset done 已恢复默认';
   });
 
+  /* ---------- a bill sent as a link: the bill travels inside the link ---------- */
+  function billLink() {
+    var o = { n: cur.s.name, d: cur.date, c: cur.cn || data.containers, b: cur.buckets.map(function (b) {
+      return { t: b.type, k: b.code, l: b.lines.map(function (r) { return { n: r.name, w: r.w, p: r.p, o: r.other ? 1 : 0 }; }) };
+    }) };
+    return location.origin + location.pathname + '#b=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o)))));
+  }
+  function openSentBill(o) {
+    cur = { s: { name: o.n, phone: '', items: data.common.slice() }, date: o.d || today(), cn: o.c && o.c.length ? o.c : data.containers.slice(),
+      buckets: (o.b || []).map(function (b) { return { type: b.t | 0, code: b.k || '', lines: (b.l || []).map(function (r) { return { name: r.n || '', w: r.w || '', p: r.p || '', other: !!r.o }; }) }; }) };
+    if (!cur.buckets.length) cur.buckets.push(newBucket(0));
+    $('supTitle').textContent = cur.s.name; $('date').value = cur.date; say('');
+    drawCounts(); drawBuckets(); refresh(); drawBill(); show('s3');
+  }
+  if (window.HOSTED) $('shareBill').hidden = false;
+  $('shareBill').addEventListener('click', function () {
+    var l = billLink();
+    window.open('https://wa.me/?text=' + encodeURIComponent('Bill 账单 ' + cur.s.name + ' ' + dmy(cur.date) + ' - RM ' + money(total()) + '\n' + l), '_blank');
+  });
   loadSaved(); drawSuppliers(); show('s1');
+  if (pendingBill) { try { openSentBill(pendingBill); } catch (e) {} pendingBill = null; }
   if (sayLater) { var b = $('exBanner'); b.hidden = false; b.textContent = sayLater; setTimeout(function () { drawSuppliers(); }, 4000); }
 })();
 </script>
