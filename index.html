@@ -98,6 +98,8 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
 .madd .btn { width: auto; min-height: 50px; padding: 4px 16px; font-size: 0.95rem; }
 .mlist { display: flex; flex-direction: column; gap: 6px; }
 .mrow { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--field); }
+.mrow input { flex: 1; min-height: 44px; border: 0; background: transparent; font-weight: 600; padding: 4px 0; }
+.mrow button.open { flex: 1; min-width: 0; border: 0; text-align: left; color: var(--ink); font-weight: 600; font-size: 0.98rem; padding: 6px 4px; overflow-wrap: anywhere; white-space: normal; }
 .mrow span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .mrow button { min-height: 44px; min-width: 52px; border-radius: 9px; border: 2px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
 .mrow button.sure { border-color: var(--bad); color: var(--bad); }
@@ -116,6 +118,10 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     </div>
     <div class="banner" id="exBanner" style="margin-top:14px">This is an example list. 这是示范名单。Tap "Add / remove 添加/删除" to put in your own suppliers and items. 点“添加/删除”放入你自己的供应商和品项。</div>
     <div class="sup-grid" id="supGrid" style="margin-top:14px"></div>
+    <div class="card" id="recentCard" style="margin-top:14px" hidden>
+      <div class="mh">Recent bills 最近账单<span class="sub">Tap to open and change. 点开可修改。</span></div>
+      <div class="mlist" id="recent"></div>
+    </div>
     <div class="card" style="margin-top:14px">
       <label class="f">Supplier not in the list? Type the name 名单里没有?输入名称<input type="text" id="osName" autocomplete="off" placeholder="Supplier name 供应商名称"></label>
       <button class="btn alt" id="osGo" type="button" style="margin-top:10px">Start bill 开始做账单 ›</button>
@@ -161,7 +167,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       <h1>Add / remove<span class="sub">添加 / 删除</span></h1>
     </div>
     <div class="card" style="margin-top:14px">
-      <div class="mh">Suppliers 供应商</div>
+      <div class="mh">Suppliers 供应商<span class="sub">Tap a name to retype it. 点名字可直接修改。</span></div>
       <div class="madd"><input type="text" id="addSup" autocomplete="off" placeholder="New supplier name 新供应商名称"><button class="btn" id="addSupGo" type="button">Add<br>添加</button></div>
       <div class="mlist" id="supList"></div>
     </div>
@@ -232,6 +238,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
   function show(id) {
     ['s1', 's2', 's3', 's4'].forEach(function (s) { $(s).hidden = s !== id; });
     $('bar').hidden = id !== 's2'; window.scrollTo(0, 0);
+    if (id === 's1' && typeof drawRecent === 'function') drawRecent();
   }
 
   /* ---------- list parsing ---------- */
@@ -297,7 +304,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
   function cntOf(ty) { return cur.buckets.filter(function (b) { return b.type === ty; }).length; }
   function drawCounts() {
     var box = $('cnt'); box.innerHTML = '';
-    data.containers.forEach(function (nm, ty) {
+    cnames().forEach(function (nm, ty) {
       var r = document.createElement('div'); r.className = 'row'; r.dataset.ty = ty;
       r.innerHTML = '<span class="lab"></span><button type="button" class="cm" aria-label="Less 减少">−</button><input type="text" class="cn" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="How many 数量"><button type="button" class="cp" aria-label="More 增加">+</button>';
       r.querySelector('.lab').textContent = nm; r.querySelector('.cn').value = cntOf(ty); box.appendChild(r);
@@ -331,13 +338,14 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
   });
   function startBill(i) {
     var s = typeof i === 'object' ? i : data.sups[i];
-    cur = { s: s, date: today(), buckets: [] };
+    cur = { s: s, date: today(), buckets: [], cn: data.containers.slice() };
     cur.buckets.push(newBucket(0));
     $('supTitle').textContent = s.name; $('date').value = cur.date; say('');
     drawCounts(); drawBuckets(); refresh(); show('s2');
   }
   function bnum(bi) { var n = 0; for (var i = 0; i <= bi; i++) if (cur.buckets[i].type === cur.buckets[bi].type) n++; return n; }
-  function blabel(bi) { return data.containers[cur.buckets[bi].type] + ' ' + bnum(bi); }
+  function cnames() { return cur.cn || data.containers; }
+  function blabel(bi) { return cnames()[cur.buckets[bi].type] + ' ' + bnum(bi); }
   function lineEl(r, li) {
     var d = document.createElement('div'); d.className = 'item' + (r.other ? ' other' : ''); d.dataset.l = li;
     d.innerHTML =
@@ -345,8 +353,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       '<div class="pr">RM <input type="text" class="p" inputmode="decimal" autocomplete="off" aria-label="Price per kg 每公斤价钱" placeholder="price 价钱"> /kg</div><div class="am"></div>' +
       '<div class="acts"><button type="button" class="rm rml">✕ Remove 删除</button></div>';
     var nm = d.querySelector('.nm');
-    if (r.other) { nm.innerHTML = '<input type="text" class="n" autocomplete="off" placeholder="Item name 品项名称">'; nm.firstChild.value = r.name; }
-    else nm.textContent = r.name;
+    nm.innerHTML = '<input type="text" class="n" autocomplete="off" placeholder="Item name 品项名称" aria-label="Item name 品项名称">'; nm.firstChild.value = r.name;
     d.querySelector('.w').value = r.w; d.querySelector('.p').value = r.p;
     return d;
   }
@@ -401,7 +408,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
   $('items').addEventListener('input', function (e) {
     var t = e.target, c = t.closest('.bucket'); if (!c) return;
     var bk = cur.buckets[+c.dataset.b];
-    if (t.classList.contains('bc')) { bk.code = t.value; if (t.value.trim()) c.classList.remove('need'); return; }
+    if (t.classList.contains('bc')) { bk.code = t.value; if (t.value.trim()) c.classList.remove('need'); saveBill(); return; }
     var d = t.closest('.item'); if (!d) return;
     var r = bk.lines[+d.dataset.l];
     if (t.classList.contains('w') || t.classList.contains('p')) {
@@ -435,24 +442,60 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
   }
   $('items').addEventListener('change', function (e) {
     var t = e.target; if (!t.classList.contains('n')) return;
+    var c0 = t.closest('.bucket'), d0 = t.closest('.item'); if (!c0 || !d0) return;
+    var r0 = cur.buckets[+c0.dataset.b].lines[+d0.dataset.l]; if (!r0 || !r0.other) return;
     var nm = t.value.trim(); if (!nm) return;
     if (data.common.some(function (c) { return c.name.toLowerCase() === nm.toLowerCase(); })) return;
     addCommon(nm);
   });
-  $('date').addEventListener('input', function () { cur.date = this.value; });
+  $('date').addEventListener('input', function () { cur.date = this.value; saveBill(); });
     function lines() {
     var L = [];
     cur.buckets.forEach(function (bk, bi) {
       bk.lines.forEach(function (r) {
         var c = calc(r.w, r.p); if (!c) return;
-        L.push({ name: (r.name || '').trim() || '-', b: bi, bl: data.containers[bk.type], bn: bnum(bi), bt: (bk.code || '').trim(), w: c.w, p: c.p, sen: c.sen });
+        L.push({ name: (r.name || '').trim() || '-', b: bi, bl: cnames()[bk.type], bn: bnum(bi), bt: (bk.code || '').trim(), w: c.w, p: c.p, sen: c.sen });
       });
     });
     return L;
   }
   function bname(it) { return it.bl + ' ' + (it.bt || it.bn); }
   function total() { return lines().reduce(function (a, x) { return a + x.sen; }, 0); }
-  function refresh() { $('total').textContent = 'RM ' + money(total()); }
+  function refresh() { $('total').textContent = 'RM ' + money(total()); saveBill(); }
+  /* ---------- recent bills (saved automatically on this phone) ---------- */
+  var BKEY = 'supplierbill.bills.v2';
+  function readBills() { try { return JSON.parse(localStorage.getItem(BKEY) || '[]') || []; } catch (e) { return []; } }
+  function saveBill() {
+    if (!cur || !lines().length) return;
+    if (!cur.id) cur.id = Date.now();
+    var a = readBills().filter(function (x) { return x.id !== cur.id; });
+    a.unshift({ id: cur.id, ts: Date.now(), sup: cur.s.name, date: cur.date, total: total(), cur: cur });
+    try { localStorage.setItem(BKEY, JSON.stringify(a.slice(0, 40))); } catch (e) {}
+  }
+  function drawRecent() {
+    var a = readBills(), box = $('recent'); box.innerHTML = '';
+    $('recentCard').hidden = !a.length;
+    a.forEach(function (rec) {
+      var r = document.createElement('div'); r.className = 'mrow';
+      var o = document.createElement('button'); o.type = 'button'; o.className = 'open';
+      o.textContent = dmy(rec.date) + '  ' + rec.sup + '  RM ' + money(rec.total);
+      o.addEventListener('click', function () { loadBill(rec); });
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕';
+      b.addEventListener('click', function () {
+        if (!b.classList.contains('sure')) {
+          b.classList.add('sure'); b.textContent = 'Delete? 删除?';
+          setTimeout(function () { if (b.isConnected) { b.classList.remove('sure'); b.textContent = '✕'; } }, 3000); return;
+        }
+        try { localStorage.setItem(BKEY, JSON.stringify(readBills().filter(function (x) { return x.id !== rec.id; }))); } catch (e) {}
+        drawRecent();
+      });
+      r.appendChild(o); r.appendChild(b); box.appendChild(r);
+    });
+  }
+  function loadBill(rec) {
+    cur = rec.cur; $('supTitle').textContent = cur.s.name; $('date').value = cur.date || today(); say('');
+    drawCounts(); drawBuckets(); refresh(); show('s2');
+  }
   function say(t, err) { var m = $('msg'); m.textContent = t || ''; m.className = 'msg' + (err ? ' err' : ''); }
   $('back2').addEventListener('click', function () { show('s1'); });
   $('nextBtn').addEventListener('click', function () {
@@ -614,12 +657,17 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     drawSuppliers(); drawManage();
     var m = $('msg4'); m.className = 'msg'; m.textContent = msg || '';
   }
-  function mrows(box, arr, label, del) {
+  function mrows(box, arr, label, del, ren) {
     box.innerHTML = '';
     if (!arr.length) { var e = document.createElement('p'); e.className = 'hint'; e.textContent = 'None yet 还没有'; box.appendChild(e); }
     arr.forEach(function (v, i) {
       var r = document.createElement('div'); r.className = 'mrow';
-      var sp = document.createElement('span'); sp.textContent = label(v);
+      var sp = document.createElement('input'); sp.type = 'text'; sp.value = label(v); sp.autocomplete = 'off'; sp.setAttribute('aria-label', 'Name 名称 (edit to rename 可直接修改)');
+      sp.addEventListener('change', function () {
+        var nv = sp.value.trim();
+        if (!nv) { sp.value = label(v); return; }
+        if (nv !== label(v)) ren(i, nv);
+      });
       var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕';
       b.addEventListener('click', function () {
         if (!b.classList.contains('sure')) {
@@ -633,12 +681,12 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     });
   }
   function drawManage() {
-    mrows($('supList'), data.sups, function (x) { return x.name; }, function (i) { data.sups.splice(i, 1); commit('Deleted 已删除'); });
-    mrows($('itemList'), data.common, function (x) { return x.name + (x.price > 0 ? '  (RM ' + x.price + '/kg)' : ''); }, function (i) { data.common.splice(i, 1); commit('Deleted 已删除'); });
+    mrows($('supList'), data.sups, function (x) { return x.name; }, function (i) { data.sups.splice(i, 1); commit('Deleted 已删除'); }, function (i, nv) { data.sups[i].name = nv; commit('Renamed 已改名'); });
+    mrows($('itemList'), data.common, function (x) { return x.name; }, function (i) { data.common.splice(i, 1); commit('Deleted 已删除'); }, function (i, nv) { data.common[i].name = nv; commit('Renamed 已改名'); });
     mrows($('conList'), data.containers, function (x) { return x; }, function (i) {
       if (data.containers.length < 2) { var m = $('msg4'); m.className = 'msg err'; m.textContent = 'Keep at least one 至少保留一个'; return; }
       data.containers.splice(i, 1); commit('Deleted 已删除');
-    });
+    }, function (i, nv) { data.containers[i] = nv; commit('Renamed 已改名'); });
     $('coName').value = data.company || '';
   }
   function has(arr, nm, f) { nm = nm.toLowerCase(); return arr.some(function (x) { return f(x).toLowerCase() === nm; }); }
