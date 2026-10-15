@@ -541,38 +541,42 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       x.fillStyle = '#1a1a1a'; x.fillRect(M, y + 18, PW - 2 * M, 3); y += 62;
     }
     page();
-    if (data.company.trim()) { var cp = 84; x.textAlign = 'left'; x.fillStyle = '#1F4FA3'; do { x.font = '800 ' + cp + 'px ' + FONT; cp -= 2; } while (x.measureText(data.company.trim()).width > PW - 2 * M && cp > 34); x.fillText(data.company.trim(), M, y + 14); y += 22 + cp; }
-    x.fillStyle = '#1a1a1a'; x.font = '700 32px ' + FONT; x.textAlign = 'left'; x.fillText('Payment Bill 付款账单', M, y); y += 50;
-    function meta(label, val, px, py) {
-      x.font = '600 24px ' + FONT; x.fillStyle = '#5a625e'; x.fillText(label, px, py);
-      var lw = x.measureText(label + '  ').width; x.font = '500 29px ' + FONT; x.fillStyle = '#1a1a1a'; x.fillText(val, px + lw, py);
-    }
-    meta('Supplier 供应商', cur.s.name, M, y); y += 46;
-    meta('Date 日期', dmy(cur.date), M, y); y += 78;
+    if (data.company.trim()) { var cp = 62; x.textAlign = 'left'; x.fillStyle = '#1F4FA3'; do { x.font = '800 ' + cp + 'px ' + FONT; cp -= 2; } while (x.measureText(data.company.trim()).width > PW - 2 * M && cp > 34); x.fillText(data.company.trim(), M, y + 14); y += 30 + cp; }
+    (function () {
+      var lab1 = 'Supplier 供应商', lab2 = 'Date 日期', dt = dmy(cur.date), sz = 29, lw1, lw2, dw, avail;
+      x.textAlign = 'left';
+      x.font = '600 24px ' + FONT; lw1 = x.measureText(lab1 + '  ').width; lw2 = x.measureText(lab2 + '  ').width;
+      x.font = '500 29px ' + FONT; dw = x.measureText(dt).width;
+      avail = PW - 2 * M - lw1 - lw2 - dw - 50;
+      do { x.font = '500 ' + sz + 'px ' + FONT; sz -= 1; } while (x.measureText(cur.s.name).width > avail && sz > 18);
+      x.font = '600 24px ' + FONT; x.fillStyle = '#5a625e'; x.fillText(lab1, M, y);
+      x.font = '500 ' + (sz + 1) + 'px ' + FONT; x.fillStyle = '#1a1a1a'; x.fillText(cur.s.name, M + lw1, y);
+      x.font = '500 29px ' + FONT; x.textAlign = 'right'; x.fillText(dt, PW - M, y);
+      x.font = '600 24px ' + FONT; x.fillStyle = '#5a625e'; x.fillText(lab2, PW - M - dw - (lw2 - x.measureText(lab2).width) - 0, y);
+      x.textAlign = 'left'; y += 64;
+    })();
     tableHead();
     var subs = {}; L.forEach(function (it) { subs[it.b] = (subs[it.b] || 0) + it.sen; });
     var lastB = -1;
     L.forEach(function (it, i) {
-      x.font = '500 28px ' + FONT; var nl = wrap(x, it.name, nameW).slice(0, 3), h = 12 + nl.length * 34, hd = it.b !== lastB;
-      if (y + h + (hd ? 50 : 0) > PH - M - 220) { page(); tableHead(); hd = true; }
+      x.font = '500 27px ' + FONT; var nl = wrap(x, it.name, nameW).slice(0, 3), h = 48 + (nl.length - 1) * 30, hd = it.b !== lastB;
+      if (y + h + (hd ? 50 : 0) > PH - M - 90) { page(); tableHead(); hd = true; }
       if (hd) {
         x.fillStyle = '#F1F3F2'; x.fillRect(M, y - 34, PW - 2 * M, 50);
         x.fillStyle = '#1a1a1a'; x.font = '700 28px ' + FONT; x.textAlign = 'left'; x.fillText(bname(it), M + 12, y);
         x.textAlign = 'right'; x.font = '700 26px ' + MONO; x.fillText(money(subs[it.b]), cAmt - 12, y);
-        y += 48; lastB = it.b;
+        y += 44; lastB = it.b;
       }
-      x.fillStyle = '#1a1a1a'; x.font = '500 28px ' + FONT; x.textAlign = 'left'; x.fillText(String(i + 1), M + 12, y);
-      nl.forEach(function (ln, k) { x.fillText(ln, nameX, y + k * 34); });
-      x.font = '500 28px ' + MONO; x.textAlign = 'right';
+      x.fillStyle = '#1a1a1a'; x.font = '500 27px ' + FONT; x.textAlign = 'left'; x.fillText(String(i + 1), M + 12, y);
+      nl.forEach(function (ln, k) { x.fillText(ln, nameX, y + k * 30); });
+      x.font = '500 27px ' + MONO; x.textAlign = 'right';
       x.fillText(fmt(it.w, 2, 3), cWt, y); x.fillText(fmt(it.p, 2, 3), cPrice + 20, y); x.fillText(money(it.sen), cAmt - 12, y);
-      y += h - 6; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 20;
+      y += h - 36; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 34;
     });
     if (y > PH - M - 200) { page(); }
     y += 6; x.fillStyle = '#1a1a1a'; x.fillRect(M, y - 38, PW - 2 * M, 3);
     x.font = '700 38px ' + FONT; x.textAlign = 'right'; x.fillText('Total payable 应付总额', cWt - 60, y + 22);
     x.font = '700 38px ' + MONO; x.fillText('RM ' + money(tot), cAmt - 12, y + 22); y += 90;
-    x.font = '500 21px ' + FONT; x.fillStyle = '#5a625e'; x.textAlign = 'left';
-    x.fillText('Amount payable to supplier. Each line rounded down to 10 sen. 应付供应商金额,每项按10仙向下取整。', M, y);
     cs.forEach(function (cv, i) {
       var g = cv.getContext('2d'); g.font = '500 20px ' + FONT; g.fillStyle = '#8a918d'; g.textAlign = 'right'; g.fillText((i + 1) + ' / ' + cs.length, PW - M, PH - 50);
     });
