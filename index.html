@@ -106,6 +106,10 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
 .hint { color: var(--muted); font-size: 0.9rem; margin: 0; }
 .crumb { display: flex; align-items: center; gap: 12px; }
 .crumb h1 { font-size: 1.3rem; }
+.trrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; color: var(--muted); }
+.trrow input { width: 96px; min-height: 52px; font-family: var(--f-num); font-size: 1.3rem; font-weight: 600; text-align: right; padding: 4px 8px; }
+#trAm { text-align: right; font-family: var(--f-num); font-weight: 600; font-size: 1.1rem; min-height: 1.4em; }
+#trAm small { display: block; font-size: 0.72rem; color: var(--muted); font-weight: 500; }
 </style>
 
 <div class="wrap">
@@ -142,6 +146,15 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       <p class="hint">1) Type how many of each 填数量. 2) In each one, tap the items inside 点选里面的品项. 3) Type the weight in kg 填公斤数.</p>
     </div>
     <div id="items" style="display:flex;flex-direction:column;gap:12px;margin-top:14px"></div>
+    <div class="card" id="trCard" style="margin-top:14px">
+      <button class="btn alt" id="trAdd" type="button">+ Transport fee 加运费<br>(optional 可不填)</button>
+      <div id="trBox" hidden style="display:flex;flex-direction:column;gap:10px">
+        <div class="mh">Transport 运费</div>
+        <div class="trrow"><input type="text" id="trN" inputmode="numeric" autocomplete="off" aria-label="Trips 趟数"><span>trip 趟 &times; RM</span><input type="text" id="trP" inputmode="decimal" autocomplete="off" placeholder="price 价钱" aria-label="Price per trip 每趟价钱"><span>/trip</span></div>
+        <div id="trAm"></div>
+        <button class="btn quiet" id="trDel" type="button">&#10005; Remove transport 删除运费</button>
+      </div>
+    </div>
   </section>
 
   <!-- screen 3: check and send -->
@@ -387,7 +400,27 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       var o = document.createElement('button'); o.type = 'button'; o.className = 'chipo o'; o.textContent = '+ Other 其他'; ch.appendChild(o);
       box.appendChild(c); sub(c, bk);
     });
+    drawTr();
   }
+  function trCalc() { return cur && cur.tr ? calc(cur.tr.n, cur.tr.p) : null; }
+  function paintTr() {
+    var c = trCalc(), am = $('trAm');
+    if (c) am.innerHTML = 'RM ' + money(c.sen) + (Math.round(c.raw) !== c.sen ? '<small>' + money(Math.round(c.raw)) + ' \u2192 ' + money(c.sen) + '</small>' : '');
+    else am.textContent = '';
+  }
+  function drawTr() {
+    var on = !!(cur && cur.tr);
+    $('trAdd').hidden = on; $('trBox').hidden = !on;
+    if (on) { $('trN').value = cur.tr.n; $('trP').value = cur.tr.p; paintTr(); }
+  }
+  $('trAdd').addEventListener('click', function () { cur.tr = { n: '1', p: '' }; drawTr(); $('trP').focus(); refresh(); });
+  $('trDel').addEventListener('click', function () { cur.tr = null; drawTr(); refresh(); });
+  ['trN', 'trP'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      var v = this.value.replace(id === 'trN' ? /[^0-9]/g : /[^0-9.,]/g, ''); if (v !== this.value) this.value = v;
+      cur.tr[id === 'trN' ? 'n' : 'p'] = v; paintTr(); refresh();
+    });
+  });
   function paint(d, r) {
     var c = calc(r.w, r.p), am = d.querySelector('.am');
     d.classList.toggle('on', !!c);
@@ -474,7 +507,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     return L;
   }
   function bname(it) { return it.bl + ' ' + (it.bt || it.bn); }
-  function total() { return lines().reduce(function (a, x) { return a + x.sen; }, 0); }
+  function total() { var t = trCalc(); return lines().reduce(function (a, x) { return a + x.sen; }, 0) + (t ? t.sen : 0); }
   function refresh() { $('total').textContent = 'RM ' + money(total()); saveBill(); }
   /* ---------- recent bills (saved automatically on this phone) ---------- */
   var BKEY = 'supplierbill.bills.v2';
@@ -573,6 +606,14 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
       x.fillText(fmt(it.w, 2, 3), cWt, y); x.fillText(fmt(it.p, 2, 3), cPrice + 20, y); x.fillText(money(it.sen), cAmt - 12, y);
       y += h - 36; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 34;
     });
+    var tc = trCalc();
+    if (tc) {
+      if (y + 60 > PH - M - 90) { page(); tableHead(); }
+      x.fillStyle = '#1a1a1a'; x.font = '700 27px ' + FONT; x.textAlign = 'left'; x.fillText('Transport 运费', nameX, y);
+      x.font = '500 27px ' + MONO; x.textAlign = 'right';
+      x.fillText(fmt(tc.w, 0, 0) + (tc.w === 1 ? ' trip' : ' trips'), cWt, y); x.fillText(fmt(tc.p, 2, 3), cPrice + 20, y); x.fillText(money(tc.sen), cAmt - 12, y);
+      y += 12; x.fillStyle = '#c9cfcb'; x.fillRect(M, y, PW - 2 * M, 2); y += 34;
+    }
     if (y > PH - M - 200) { page(); }
     y += 6; x.fillStyle = '#1a1a1a'; x.fillRect(M, y - 38, PW - 2 * M, 3);
     x.font = '700 38px ' + FONT; x.textAlign = 'right'; x.fillText('Total payable 应付总额', cWt - 60, y + 22);
@@ -628,6 +669,7 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
     t.push('');
     var lb = -1, n = 0;
     L.forEach(function (it) { if (it.b !== lb) { lb = it.b; t.push('*' + bname(it) + '*'); } n++; t.push(n + '. ' + it.name + '  ' + fmt(it.w, 2, 3) + 'kg x ' + fmt(it.p, 2, 3) + ' = RM ' + money(it.sen)); });
+    var tw = trCalc(); if (tw) t.push('Transport 运费  ' + fmt(tw.w, 0, 0) + ' trip x ' + fmt(tw.p, 2, 3) + ' = RM ' + money(tw.sen));
     t.push(''); t.push('*Total payable 应付总额: RM ' + money(total()) + '*'); return t.join('\n');
   }
   var dlReady = null; try { dlReady = claude.use('downloads'); } catch (e) {}
@@ -768,13 +810,13 @@ textarea { min-height: 360px; font-family: var(--f-num); font-size: 0.92rem; lin
 
   /* ---------- a bill sent as a link: the bill travels inside the link ---------- */
   function billLink() {
-    var o = { n: cur.s.name, d: cur.date, c: cur.cn || data.containers, b: cur.buckets.map(function (b) {
+    var o = { n: cur.s.name, d: cur.date, c: cur.cn || data.containers, tr: cur.tr ? { n: cur.tr.n, p: cur.tr.p } : null, b: cur.buckets.map(function (b) {
       return { t: b.type, k: b.code, l: b.lines.map(function (r) { return { n: r.name, w: r.w, p: r.p, o: r.other ? 1 : 0 }; }) };
     }) };
     return location.origin + location.pathname + '#b=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o)))));
   }
   function openSentBill(o) {
-    cur = { s: { name: o.n, phone: '', items: data.common.slice() }, date: o.d || today(), cn: o.c && o.c.length ? o.c : data.containers.slice(),
+    cur = { s: { name: o.n, phone: '', items: data.common.slice() }, date: o.d || today(), cn: o.c && o.c.length ? o.c : data.containers.slice(), tr: o.tr ? { n: String(o.tr.n || ''), p: String(o.tr.p || '') } : null,
       buckets: (o.b || []).map(function (b) { return { type: b.t | 0, code: b.k || '', lines: (b.l || []).map(function (r) { return { name: r.n || '', w: r.w || '', p: r.p || '', other: !!r.o }; }) }; }) };
     if (!cur.buckets.length) cur.buckets.push(newBucket(0));
     $('supTitle').textContent = cur.s.name; $('date').value = cur.date; say('');
